@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: diadoc-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:////app/data/diabetes_assistant.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gpt-oss:120b-cloud}
+      - OLLAMA_FALLBACK_TO_GEMINI=${OLLAMA_FALLBACK_TO_GEMINI:-true}
+      - PAPERS_DIR=/app/data/papers
+      - RENDERED_PAGES_DIR=/app/rendered_pages
+      - INDEX_STORE_PATH=/app/data/indices/byaldi_index
+    volumes:
+      - ./backend/data:/app/data
+      - ./backend/rendered_pages:/app/rendered_pages
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+# The mobile client (Flutter, ./mobile) runs on a device/emulator and talks to
+# the backend on port 8000; it is not containerised.

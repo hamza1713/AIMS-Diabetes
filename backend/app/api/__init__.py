@@ -1,0 +1,3 @@
+"""
+DiaDoc AI — API Package
+"""
