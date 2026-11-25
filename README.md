@@ -229,12 +229,73 @@ flutter run --dart-define=API_BASE_URL=https://api.example.com
 | **Physical phone** (same Wi-Fi) | start the backend with `--host 0.0.0.0`, then `flutter run --dart-define=API_BASE_URL=http://<your-PC-LAN-IP>:8000` | your computer's LAN IP |
 | **Web (quick preview)** | `flutter run -d chrome --web-port 3000` | `http://127.0.0.1:8000`; port 3000 is already in `CORS_ORIGINS` |
 
-Release builds:
+### Build an Android APK yourself
+
+**Before you start**
+
+- Install the Flutter SDK and Android Studio (for the Android SDK), then run `flutter doctor` and accept the Android licenses (`flutter doctor --android-licenses`).
+- Keep **at least 5–6 GB free** on the drive holding the project and your Gradle cache. Android builds fail with *"There is not enough space on the disk"* otherwise.
+- Decide where the app will find the backend (`API_BASE_URL`):
+  - **Your own phone + backend on your PC:** use your PC's Wi-Fi IP. Find it with `ipconfig` (Windows) or `ipconfig getifaddr en0` (macOS); it looks like `192.168.x.x`.
+  - **Deployed backend:** use its HTTPS address.
+
+**1. Start from a clean build folder** (recommended, frees space):
 
 ```bash
-flutter build apk --release --dart-define=API_BASE_URL=https://api.example.com
-flutter build appbundle --release --dart-define=API_BASE_URL=https://api.example.com   # Play Store
-flutter build ipa --release --dart-define=API_BASE_URL=https://api.example.com         # App Store (macOS)
+cd mobile
+flutter clean
+flutter pub get
+```
+
+**2a. Debug APK — for testing against the backend on your PC**
+
+Debug builds allow plain `http://` to a local backend. Building only for `android-arm64` covers modern phones and keeps the build small.
+
+```bash
+flutter build apk --debug --target-platform android-arm64 --dart-define=API_BASE_URL=http://192.168.0.104:8000
+```
+
+Replace `192.168.0.104` with your PC's IP. Then start the backend so the phone can reach it:
+
+```bash
+cd backend
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Your phone must be on the same Wi-Fi network. Allow port 8000 through the firewall on first run.
+
+**2b. Release APK — for sharing or production** (backend must be HTTPS):
+
+```bash
+flutter build apk --release --split-per-abi --dart-define=API_BASE_URL=https://api.example.com
+```
+
+`--split-per-abi` makes one small APK per CPU type. Most phones need the `arm64-v8a` one.
+
+**3. Find the APK**
+
+| Build | File |
+|---|---|
+| Debug | `mobile/build/app/outputs/flutter-apk/app-debug.apk` |
+| Release (split) | `mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` (plus `armeabi-v7a`, `x86_64`) |
+
+**4. Install on your phone**
+
+- **USB:** enable *Developer options → USB debugging*, connect the phone, then run `flutter install`, or:
+
+  ```bash
+  adb install -r build/app/outputs/flutter-apk/app-debug.apk
+  ```
+
+- **Without a cable:** copy the APK to the phone (USB, Drive, email) and open it. Allow *Install unknown apps* for that source when asked.
+
+> Release APKs are signed with the debug key unless you configure your own keystore. For the Play Store, set up [app signing](https://docs.flutter.dev/deployment/android#sign-the-app) and build an App Bundle instead (below).
+
+### Other release builds
+
+```bash
+flutter build appbundle --release --dart-define=API_BASE_URL=https://api.example.com   # Google Play
+flutter build ipa --release --dart-define=API_BASE_URL=https://api.example.com         # App Store (macOS + Xcode)
 ```
 
 Notes:
@@ -354,6 +415,8 @@ The compose file mounts `backend/data` (database, papers, index) and `backend/re
 | Backend refuses to start with `DEBUG=False` | Set `JWT_SECRET_KEY`. |
 | Web build can't call the API | Add the web origin to `CORS_ORIGINS`. |
 | `/api/v1/health` is slow | It probes the LLM providers; use `/` for a quick liveness check. |
+| APK build fails with *"not enough space on the disk"* | Free several GB, run `flutter clean`, and build for one ABI (`--target-platform android-arm64`). |
+| APK installed but can't reach the backend | The phone must use your PC's LAN IP (not `127.0.0.1`/`10.0.2.2`), the backend must run with `--host 0.0.0.0`, both must be on the same Wi-Fi, and release APKs need HTTPS. |
 
 ---
 
